@@ -28,7 +28,9 @@
 ./memobot-gemini-relay
 ```
 
-**使用代理运行 (推荐)**:
+windows 直接运行 memubot-gemini-relay-windows.exe
+
+**使用代理运行**:
 ```bash
 ./memobot-gemini-relay --proxy http://127.0.0.1:7890
 ```
@@ -46,6 +48,7 @@ go run memubot-gemini-relay.go
 ### 编译
 ```bash
 go mod init memubot-gemini-relay && go build -o memubot-gemini-relay . && rm go.mod
+GOOS=windows GOARCH=amd64 go build -o memubot-gemini-relay-windows.exe memubot-gemini-relay.go
 ```
 
 ## 🖥️ 运行效果
