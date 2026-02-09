@@ -8,7 +8,7 @@
 - **协议转换**: 将各种 API 格式的消息流完整映射至 Gemini `generateContent` 接口。
 - **🔧 Function Call 支持**: 完整支持 Anthropic/MiniMax 风格的工具调用（`tool_use`/`tool_result`）。
 - **🧠 Thinking Mode**: 支持 Gemini 2.0 的思考模式，自动处理 `thought_signature`。
-- **📦 上下文缓存**: 自动缓存 System Prompt 和 Tools 定义，**有效避免 TPM 触顶**，大幅减少每次请求的 token 消耗。
+- **📦 上下文缓存**: 自动缓存 System Prompt 和 Tools 定义，减少网络传输和 API 成本。
 - **内置代理**: 支持 `--proxy` 参数，方便在中国大陆等网络环境下通过本地代理访问 Google 服务。
 - **极简运行**: 无需配置复杂的环境变量，启动即用。
 
@@ -107,13 +107,20 @@ GOOS=windows GOARCH=amd64 go build -o memubot-gemini-relay-windows.exe memubot-g
 2. **Thinking Mode**：Gemini 2.0 的函数调用需要 `thought_signature`，本 relay 会自动缓存和恢复
 3. **调试模式**：使用 `--debug` 查看完整的请求/响应数据
 
-## 📦 上下文缓存（避免 TPM 触顶）
+## 📦 上下文缓存
 
 本中继实现了 [Gemini Explicit Context Caching](https://ai.google.dev/gemini-api/docs/caching)，自动缓存 System Prompt 和 Tools 定义。
 
-> ⚠️ **为什么需要这个功能？**  
-> memU bot 每次请求都包含 ~30KB System Prompt + ~15KB Tools 定义，在长对话中很容易触及 Gemini API 的 **TPM（Tokens Per Minute）限制**。  
-> 通过缓存，后续请求仅发送新消息，**token 消耗减少 70%+**，有效避免触顶。
+### 收益
+
+| 维度 | 效果 |
+|------|------|
+| **网络传输** | 后续请求仅发送新消息，传输量减少 ~70% |
+| **响应延迟** | 减少数据传输带来的延迟 |
+| **API 成本** | 缓存 token 按优惠价计费 |
+
+> ⚠️ **关于 TPM 限制**  
+> 缓存的 token 仍计入 TPM（Tokens Per Minute）配额。如需控制 TPM，请使用请求节流或精简 Prompt。
 
 ### 工作原理
 

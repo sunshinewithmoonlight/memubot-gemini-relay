@@ -8,7 +8,7 @@ This is a high-efficiency, lightweight Go language relay server designed to enab
 - **Protocol Conversion**: Maps message streams in various API formats completely to the Gemini `generateContent` interface.
 - **🔧 Function Call Support**: Fully supports Anthropic/MiniMax style tool calls (`tool_use`/`tool_result`).
 - **🧠 Thinking Mode**: Supports Gemini 2.0's thinking mode, automatically handling `thought_signature`.
-- **📦 Context Caching**: Automatically caches System Prompt and Tools definitions, **effectively avoiding TPM limits**, significantly reducing token consumption per request.
+- **📦 Context Caching**: Automatically caches System Prompt and Tools definitions, reducing network transfer and API costs.
 - **Built-in Proxy**: Supports the `--proxy` parameter, facilitating access to Google services through a local proxy in network environments like mainland China.
 - **Minimalist Operation**: No complex environment variable configuration required, ready to use upon startup.
 
@@ -107,13 +107,20 @@ Supports Anthropic/MiniMax style tool definitions:
 2. **Thinking Mode**: Gemini 2.0 function calling requires `thought_signature`, which this relay automatically caches and restores.
 3. **Debug Mode**: Use `--debug` to view complete request/response data.
 
-## 📦 Context Caching (Avoid TPM Limits)
+## 📦 Context Caching
 
 This relay implements [Gemini Explicit Context Caching](https://ai.google.dev/gemini-api/docs/caching), automatically caching System Prompt and Tools definitions.
 
-> ⚠️ **Why is this feature needed?**  
-> Each memU bot request includes ~30KB System Prompt + ~15KB Tools definitions. In long conversations, this easily hits Gemini API's **TPM (Tokens Per Minute) limits**.  
-> With caching, subsequent requests only send new messages, **reducing token consumption by 70%+**, effectively avoiding rate limits.
+### Benefits
+
+| Dimension | Effect |
+|-----------|--------|
+| **Network Transfer** | Subsequent requests only send new messages, ~70% reduction |
+| **Response Latency** | Reduced latency from less data transfer |
+| **API Cost** | Cached tokens billed at discounted rate |
+
+> ⚠️ **About TPM Limits**  
+> Cached tokens still count toward TPM (Tokens Per Minute) quota. For TPM control, use request throttling or prompt optimization.
 
 ### How It Works
 
