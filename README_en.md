@@ -29,6 +29,7 @@ In the settings interface of memU bot, please clear configuration as shown below
 **Basic Run**:
 ```bash
 ./memobot-gemini-relay
+# Press Ctrl+C to gracefully exit and automatically clean up cache
 ```
 
 For Windows, directly run `memubot-gemini-relay-windows.exe`.
@@ -124,21 +125,21 @@ This relay implements [Gemini Explicit Context Caching](https://ai.google.dev/ge
 
 ### How It Works
 
-1. **First Request**: Creates a cache containing System Prompt + Tools, stores the cache ID
-2. **Subsequent Requests**: Reuses the cache, only sends new messages
-3. **Cache Expiry**: TTL is 30 minutes, automatically recreated upon expiry
+1. **Incremental Update**: Automatically detects conversation history, reuses cache prefix, and sends only new messages (Delta).
+2. **Smart Keying**: Automatically normalizes timestamps in System Prompt to prevent cache invalidation due to time changes.
+3. **Safe Exit**: Automatically cleans up all caches upon program exit (Ctrl+C) to prevent continuous billing.
 
 ### Debug Logs
 
 | Log Message | Meaning |
 |-------------|----------|
-| `[CACHE] 创建成功: cachedContents/xxx` | Cache created successfully |
-| `[CACHE] 命中缓存: cachedContents/xxx` | Cache hit, reusing existing cache |
-| `[CACHE] 创建失败: ... (回退到完整请求)` | Cache creation failed, falling back to full request |
+| `[CACHE] 新缓存创建: xxx (含 N 条消息)` | Created new cache containing historical messages |
+| `[CACHE] 增量命中: xxx (缓存 N 条，增量 M 条)` | Reuse cache, sending only M new messages |
+| `[CACHE] 消息变化过大，重建缓存` | History mismatch, rebuilding cache |
 
 ### Notes
 
-- Cache creation requires minimum ~4096 tokens; smaller prompts will fallback to full requests
+- Cache creation takes about 1-2 seconds but significantly reduces subsequent request latency
 - If System Prompt or Tools change, a new cache is automatically created
 
 

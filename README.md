@@ -29,6 +29,7 @@
 **基本运行**:
 ```bash
 ./memobot-gemini-relay
+# 按 Ctrl+C 可优雅退出并自动清理缓存
 ```
 
 windows 直接运行 memubot-gemini-relay-windows.exe
@@ -124,21 +125,21 @@ GOOS=windows GOARCH=amd64 go build -o memubot-gemini-relay-windows.exe memubot-g
 
 ### 工作原理
 
-1. **首次请求**：创建包含 System Prompt + Tools 的缓存，保存缓存 ID
-2. **后续请求**：复用缓存，仅发送新消息
-3. **缓存过期**：TTL 为 30 分钟，过期后自动重建
+1. **增量更新**：自动检测对话历史，复用缓存前缀，仅发送新增消息（Delta）。
+2. **智能键值**：自动规范化 System Prompt 中的时间戳，避免因时间变化导致缓存失效。
+3. **安全退出**：程序退出时（Ctrl+C）自动清理所有缓存，防止持续计费。
 
 ### 调试日志
 
 | 日志信息 | 含义 |
 |---------|------|
-| `[CACHE] 创建成功: cachedContents/xxx` | 缓存创建成功 |
-| `[CACHE] 命中缓存: cachedContents/xxx` | 缓存命中，复用已有缓存 |
-| `[CACHE] 创建失败: ... (回退到完整请求)` | 缓存创建失败，回退到完整请求 |
+| `[CACHE] 新缓存创建: xxx (含 N 条消息)` | 创建了包含历史消息的新缓存 |
+| `[CACHE] 增量命中: xxx (缓存 N 条，增量 M 条)` | 复用缓存，仅发送 M 条新消息 |
+| `[CACHE] 消息变化过大，重建缓存` | 历史消息不匹配，需重建缓存 |
 
 ### 注意事项
 
-- 缓存创建需要最小约 4096 tokens，小 prompt 会自动回退到完整请求
+- 缓存创建耗时约 1-2 秒，但能显著减少后续请求延迟
 - 如果 System Prompt 或 Tools 发生变化，会自动创建新缓存
 
 
