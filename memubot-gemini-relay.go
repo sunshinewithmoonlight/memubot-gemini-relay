@@ -24,6 +24,7 @@ import (
 // --- 全局变量与标志 ---
 var (
 	debugMode bool
+	cacheMode bool
 	proxyURL  string
 	apiKey    string = "AIzaSyD81zQQoHvwSVurzOOaWJtGI5ZiARySgwc" // 默认 Key
 
@@ -426,56 +427,76 @@ func parseMalformedFunctionCall(msg string) (string, map[string]any) {
 
 func main() {
 	flag.BoolVar(&debugMode, "debug", false, "是否开启调试模式")
+	flag.BoolVar(&cacheMode, "cache", false, "是否开启 Gemini 上下文缓存")
 	flag.StringVar(&proxyURL, "proxy", "", "代理服务器地址 (如 http://127.0.0.1:7890)")
 	flag.Parse()
 
-	fmt.Println("用于 memU bot 的 Gemini API 中继工具")
-	fmt.Println("memU bot 设置如下：")
-	fmt.Println("----------------------------------")
-	fmt.Println(" LLM 提供商：Custom Provider")
-	fmt.Println(" API 地址：http://127.0.0.1:6300/")
-	fmt.Println(" API 密钥：【Gemini api key】")
-	fmt.Println(" 模型名称：gemini-3-flash-preview")
-	fmt.Printf(" 调试模式 (Debug): %v\n", debugMode) // Force print debug status
-	fmt.Println("----------------------------------")
-	if proxyURL != "" {
-		fmt.Printf("已启用代理: %s\n", proxyURL)
+	fmt.Println("        用于 memU bot 的 Gemini API 中继工具")
+	fmt.Println("               memU bot 中配置如下：")
+	fmt.Println("---------------------------------------------------")
+	fmt.Println("        LLM 提供商：Custom Provider")
+	fmt.Println("        API 地址：http://127.0.0.1:6300/")
+	fmt.Println("        API 密钥：【Gemini api key】")
+	fmt.Println("        模型名称：gemini-3-flash-preview")
+	fmt.Println("---------------------------------------------------")
+
+	if !debugMode {
+		fmt.Println("[ ] --debug 显示处理状态")
 	} else {
-		fmt.Println("使用 --proxy 让请求通过代理转发")
-		fmt.Println("如 --proxy http://127.0.0.1:7890")
+		fmt.Println("[✓] --debug 显示处理状态")
 	}
+
+	if !cacheMode {
+		fmt.Println("[ ] --cache 额外的缓存费用和减少的 token 费用")
+	} else {
+		fmt.Println("[✓] --cache 额外的缓存费用和减少的 token 费用")
+	}
+
+	if proxyURL == "" {
+		fmt.Println("[ ] --proxy 代理，如 --proxy http://127.0.0.1:7890")
+	} else {
+		fmt.Printf("[✓] --proxy %s 代理\n", proxyURL)
+	}
+
+	fmt.Println("---------------------------------------------------")
 	fmt.Println("当前正在中继Gemini api")
-	fmt.Println("按 Ctrl+C 退出并清理缓存")
 
-	// 设置信号处理
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	// 启动 HTTP 服务器
-	server := &http.Server{Addr: ":6300"}
 	http.HandleFunc("/v1/", handleProxy)
 
-	go func() {
-		if err := server.ListenAndServe(); err != http.ErrServerClosed {
-			log.Fatalf("HTTP server error: %v", err)
+	if cacheMode {
+		// fmt.Println("按 Ctrl+C 退出并清理缓存")
+
+		// 设置信号处理
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+
+		// 启动 HTTP 服务器
+		server := &http.Server{Addr: ":6300"}
+
+		go func() {
+			if err := server.ListenAndServe(); err != http.ErrServerClosed {
+				log.Fatalf("HTTP server error: %v", err)
+			}
+		}()
+
+		// 等待中断信号
+		<-ctx.Done()
+		stop()
+		fmt.Println("\n[EXIT] 正在关闭...")
+
+		// 清理所有缓存
+		cleanupCaches()
+
+		// 关闭服务器
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Server shutdown error: %v", err)
 		}
-	}()
-
-	// 等待中断信号
-	<-ctx.Done()
-	stop()
-	fmt.Println("\n[EXIT] 正在关闭...")
-
-	// 清理所有缓存
-	cleanupCaches()
-
-	// 关闭服务器
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Server shutdown error: %v", err)
+		fmt.Println("[EXIT] 完成")
+	} else {
+		log.Fatal(http.ListenAndServe(":6300", nil))
 	}
-	fmt.Println("[EXIT] 完成")
 }
 
 // cleanupCaches 删除所有缓存避免继续计费
@@ -759,7 +780,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// === 1.5 缓存处理 ===
+	// === 1.5 HTTP Client ===
 	transport := &http.Transport{}
 	if proxyURL != "" {
 		pURL, _ := url.Parse(proxyURL)
@@ -770,38 +791,60 @@ func handleProxy(w http.ResponseWriter, r *http.Request) {
 		Timeout:   120 * time.Second,
 	}
 
-	var cacheName string
-	var deltaContents []GoogleContent
+	// === 1.6 缓存处理（仅在 --cache 模式下启用）===
+	if cacheMode {
+		var cacheName string
+		var deltaContents []GoogleContent
 
-	if gReq.SystemInstruction != nil || len(gReq.Tools) > 0 {
-		// 计算基础缓存键 (System + Tools)
-		cacheKey := computeCacheKey(genReq.System, gReq.Tools)
+		if gReq.SystemInstruction != nil || len(gReq.Tools) > 0 {
+			// 计算基础缓存键 (System + Tools)
+			cacheKey := computeCacheKey(genReq.System, gReq.Tools)
 
-		contextCacheMu.RLock()
-		entry, exists := contextCache[cacheKey]
-		contextCacheMu.RUnlock()
+			contextCacheMu.RLock()
+			entry, exists := contextCache[cacheKey]
+			contextCacheMu.RUnlock()
 
-		if exists && time.Now().Before(entry.ExpireAt) {
-			// 有缓存，检查消息是否增量
-			isIncremental, startIdx := isIncrementalUpdate(
-				entry.CachedDigest, entry.CachedCount, gReq.Contents)
+			if exists && time.Now().Before(entry.ExpireAt) {
+				// 有缓存，检查消息是否增量
+				isIncremental, startIdx := isIncrementalUpdate(
+					entry.CachedDigest, entry.CachedCount, gReq.Contents)
 
-			if isIncremental && startIdx < len(gReq.Contents) {
-				// 增量更新：使用缓存，只发送新消息
-				cacheName = entry.Name
-				deltaContents = gReq.Contents[startIdx:]
-				if debugMode {
-					fmt.Printf("[CACHE] 增量命中: %s (缓存 %d 条，增量 %d 条)\n",
-						cacheName, entry.CachedCount, len(deltaContents))
+				if isIncremental && startIdx < len(gReq.Contents) {
+					// 增量更新：使用缓存，只发送新消息
+					cacheName = entry.Name
+					deltaContents = gReq.Contents[startIdx:]
+					if debugMode {
+						fmt.Printf("[CACHE] 增量命中: %s (缓存 %d 条，增量 %d 条)\n",
+							cacheName, entry.CachedCount, len(deltaContents))
+					}
+				} else {
+					// 非增量：删除旧缓存，创建新缓存
+					if debugMode {
+						fmt.Printf("[CACHE] 消息变化过大，重建缓存\n")
+					}
+					deleteCache(client, reqKey, entry.Name)
+
+					// 缓存除最后一条外的所有消息（Gemini 要求 contents 非空）
+					if len(gReq.Contents) > 1 {
+						contentsToCache := gReq.Contents[:len(gReq.Contents)-1]
+						name, err := createCacheWithContents(client, reqKey, genReq.Model,
+							gReq.SystemInstruction, gReq.Tools, contentsToCache)
+						if err != nil {
+							fmt.Printf("[CACHE] 创建失败: %v\n", err)
+						} else {
+							cacheName = name
+							deltaContents = gReq.Contents[len(gReq.Contents)-1:]
+							saveCacheEntry(cacheKey, name, contentsToCache)
+							if debugMode {
+								fmt.Printf("[CACHE] 新缓存创建: %s (含 %d 条消息，增量 %d 条)\n",
+									cacheName, len(contentsToCache), len(deltaContents))
+							}
+						}
+					}
+					// 如果只有 1 条消息，不创建缓存，直接发送完整请求
 				}
 			} else {
-				// 非增量：删除旧缓存，创建新缓存
-				if debugMode {
-					fmt.Printf("[CACHE] 消息变化过大，重建缓存\n")
-				}
-				deleteCache(client, reqKey, entry.Name)
-
-				// 缓存除最后一条外的所有消息（Gemini 要求 contents 非空）
+				// 无缓存或已过期，创建新缓存（缓存除最后一条外的所有消息）
 				if len(gReq.Contents) > 1 {
 					contentsToCache := gReq.Contents[:len(gReq.Contents)-1]
 					name, err := createCacheWithContents(client, reqKey, genReq.Model,
@@ -820,34 +863,15 @@ func handleProxy(w http.ResponseWriter, r *http.Request) {
 				}
 				// 如果只有 1 条消息，不创建缓存，直接发送完整请求
 			}
-		} else {
-			// 无缓存或已过期，创建新缓存（缓存除最后一条外的所有消息）
-			if len(gReq.Contents) > 1 {
-				contentsToCache := gReq.Contents[:len(gReq.Contents)-1]
-				name, err := createCacheWithContents(client, reqKey, genReq.Model,
-					gReq.SystemInstruction, gReq.Tools, contentsToCache)
-				if err != nil {
-					fmt.Printf("[CACHE] 创建失败: %v\n", err)
-				} else {
-					cacheName = name
-					deltaContents = gReq.Contents[len(gReq.Contents)-1:]
-					saveCacheEntry(cacheKey, name, contentsToCache)
-					if debugMode {
-						fmt.Printf("[CACHE] 新缓存创建: %s (含 %d 条消息，增量 %d 条)\n",
-							cacheName, len(contentsToCache), len(deltaContents))
-					}
-				}
-			}
-			// 如果只有 1 条消息，不创建缓存，直接发送完整请求
 		}
-	}
 
-	// 设置请求
-	if cacheName != "" && len(deltaContents) > 0 {
-		gReq.CachedContent = cacheName
-		gReq.SystemInstruction = nil
-		gReq.Tools = nil
-		gReq.Contents = deltaContents
+		// 设置请求
+		if cacheName != "" && len(deltaContents) > 0 {
+			gReq.CachedContent = cacheName
+			gReq.SystemInstruction = nil
+			gReq.Tools = nil
+			gReq.Contents = deltaContents
+		}
 	}
 
 	// === 2. 发送请求 ===

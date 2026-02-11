@@ -8,18 +8,18 @@ This is a high-efficiency, lightweight Go language relay server designed to enab
 - **Protocol Conversion**: Maps message streams in various API formats completely to the Gemini `generateContent` interface.
 - **🔧 Function Call Support**: Fully supports Anthropic/MiniMax style tool calls (`tool_use`/`tool_result`).
 - **🧠 Thinking Mode**: Supports Gemini 2.0's thinking mode, automatically handling `thought_signature`.
-- **📦 Context Caching**: Automatically caches System Prompt and Tools definitions, reducing network transfer and API costs.
+- **📦 Context Caching**: Enable via `--cache` parameter. Automatically caches System Prompt and Tools definitions, reducing network transfer and API costs.
 - **Built-in Proxy**: Supports the `--proxy` parameter, facilitating access to Google services through a local proxy in network environments like mainland China.
 - **Minimalist Operation**: No complex environment variable configuration required, ready to use upon startup.
 
 ## ⚙️ memU bot Configuration Guide
 
-In the settings interface of memU bot, please clear configuration as shown below:
+In the settings interface of memU bot, please configure as shown below:
 
 | Configuration Item | Content |
 | :--- | :--- |
 | **LLM Provider** | `Custom Provider` |
-| **API Address** | `http://127.0.0.1:6300/v1` |
+| **API Address** | `http://127.0.0.1:6300/` |
 | **API Key** | `Your Google Gemini API Key` |
 | **Model Name** | `gemini-3-flash-preview` (or other Gemini models) |
 
@@ -29,7 +29,6 @@ In the settings interface of memU bot, please clear configuration as shown below
 **Basic Run**:
 ```bash
 ./memobot-gemini-relay
-# Press Ctrl+C to gracefully exit and automatically clean up cache
 ```
 
 For Windows, directly run `memubot-gemini-relay-windows.exe`.
@@ -37,6 +36,12 @@ For Windows, directly run `memubot-gemini-relay-windows.exe`.
 **Run with Proxy**:
 ```bash
 ./memobot-gemini-relay --proxy http://127.0.0.1:7890
+```
+
+**Enable Context Caching (reduce transfer and API costs)**:
+```bash
+./memobot-gemini-relay --cache
+# Press Ctrl+C to gracefully exit and automatically clean up cache
 ```
 
 **Debug Mode (View detailed packets)**:
@@ -110,7 +115,13 @@ Supports Anthropic/MiniMax style tool definitions:
 
 ## 📦 Context Caching
 
-This relay implements [Gemini Explicit Context Caching](https://ai.google.dev/gemini-api/docs/caching), automatically caching System Prompt and Tools definitions.
+> [!IMPORTANT]
+> Context caching is **disabled** by default. When enabled, it may incur additional caching fees but will reduce token billing. Enable via the `--cache` parameter:
+> ```bash
+> ./memobot-gemini-relay --cache
+> ```
+
+This relay implements [Gemini Explicit Context Caching](https://ai.google.dev/gemini-api/docs/caching), automatically caching System Prompt and Tools definitions when enabled.
 
 ### Benefits
 
@@ -132,7 +143,7 @@ This relay implements [Gemini Explicit Context Caching](https://ai.google.dev/ge
 ### Debug Logs
 
 | Log Message | Meaning |
-|-------------|----------|
+|-------------|---------|
 | `[CACHE] 新缓存创建: xxx (含 N 条消息)` | Created new cache containing historical messages |
 | `[CACHE] 增量命中: xxx (缓存 N 条，增量 M 条)` | Reuse cache, sending only M new messages |
 | `[CACHE] 消息变化过大，重建缓存` | History mismatch, rebuilding cache |
@@ -146,17 +157,19 @@ This relay implements [Gemini Explicit Context Caching](https://ai.google.dev/ge
 ## 🖥️ Running Effect
 After startup, you will see the following prompt:
 ```text
-Gemini API relay tool for memU bot
-memU bot settings are as follows:
-----------------------------------
- LLM Provider: Custom Provider
- API Address: http://127.0.0.1:6300/
- API Key: [Gemini api key]
- Model Name: gemini-3-flash-preview
-----------------------------------
-Use --proxy to forward requests through a proxy
-e.g., --proxy http://127.0.0.1:7890
-Currently relaying Gemini api
+        用于 memU bot 的 Gemini API 中继工具
+               memU bot 中配置如下：
+---------------------------------------------------
+        LLM 提供商：Custom Provider
+        API 地址：http://127.0.0.1:6300/
+        API 密钥：【Gemini api key】
+        模型名称：gemini-3-flash-preview
+---------------------------------------------------
+[ ] --debug 显示处理状态
+[ ] --cache 额外的缓存费用和减少的 token 费用
+[ ] --proxy 代理，如 --proxy http://127.0.0.1:7890
+---------------------------------------------------
+当前正在中继Gemini api
 ```
 
 ## License

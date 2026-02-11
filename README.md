@@ -8,7 +8,7 @@
 - **协议转换**: 将各种 API 格式的消息流完整映射至 Gemini `generateContent` 接口。
 - **🔧 Function Call 支持**: 完整支持 Anthropic/MiniMax 风格的工具调用（`tool_use`/`tool_result`）。
 - **🧠 Thinking Mode**: 支持 Gemini 2.0 的思考模式，自动处理 `thought_signature`。
-- **📦 上下文缓存**: 自动缓存 System Prompt 和 Tools 定义，减少网络传输和 API 成本。
+- **📦 上下文缓存**: 通过 `--cache` 参数启用。自动缓存 System Prompt 和 Tools 定义，减少网络传输和 API 成本。
 - **内置代理**: 支持 `--proxy` 参数，方便在中国大陆等网络环境下通过本地代理访问 Google 服务。
 - **极简运行**: 无需配置复杂的环境变量，启动即用。
 
@@ -29,7 +29,6 @@
 **基本运行**:
 ```bash
 ./memobot-gemini-relay
-# 按 Ctrl+C 可优雅退出并自动清理缓存
 ```
 
 windows 直接运行 memubot-gemini-relay-windows.exe
@@ -37,6 +36,12 @@ windows 直接运行 memubot-gemini-relay-windows.exe
 **使用代理运行**:
 ```bash
 ./memobot-gemini-relay --proxy http://127.0.0.1:7890
+```
+
+**启用上下文缓存 (减少传输量与 API 成本)**:
+```bash
+./memobot-gemini-relay --cache
+# 按 Ctrl+C 可优雅退出并自动清理缓存
 ```
 
 **调试模式 (查看详细数据包)**:
@@ -110,7 +115,13 @@ GOOS=windows GOARCH=amd64 go build -o memubot-gemini-relay-windows.exe memubot-g
 
 ## 📦 上下文缓存
 
-本中继实现了 [Gemini Explicit Context Caching](https://ai.google.dev/gemini-api/docs/caching)，自动缓存 System Prompt 和 Tools 定义。
+> [!IMPORTANT]
+> 上下文缓存默认**关闭**，开启后可能会导致额外的缓存费用，但会减少 token 计费。需通过 `--cache` 参数启用：
+> ```bash
+> ./memobot-gemini-relay --cache
+> ```
+
+本中继实现了 [Gemini Explicit Context Caching](https://ai.google.dev/gemini-api/docs/caching)，启用后自动缓存 System Prompt 和 Tools 定义。
 
 ### 收益
 
@@ -146,16 +157,18 @@ GOOS=windows GOARCH=amd64 go build -o memubot-gemini-relay-windows.exe memubot-g
 ## 🖥️ 运行效果
 启动后，你会看到如下提示：
 ```text
-用于 memU bot 的 Gemini API 中继工具
-memU bot 设置如下：
-----------------------------------
- LLM 提供商：Custom Provider
- API 地址：http://127.0.0.1:6300/
- API 密钥：【Gemini api key】
- 模型名称：gemini-3-flash-preview
-----------------------------------
-使用 --proxy 让请求通过代理转发
-如 --proxy http://127.0.0.1:7890
+        用于 memU bot 的 Gemini API 中继工具
+               memU bot 中配置如下：
+---------------------------------------------------
+        LLM 提供商：Custom Provider
+        API 地址：http://127.0.0.1:6300/
+        API 密钥：【Gemini api key】
+        模型名称：gemini-3-flash-preview
+---------------------------------------------------
+[ ] --debug 显示处理状态
+[ ] --cache 额外的缓存费用和减少的 token 费用
+[ ] --proxy 代理，如 --proxy http://127.0.0.1:7890
+---------------------------------------------------
 当前正在中继Gemini api
 ```
 
