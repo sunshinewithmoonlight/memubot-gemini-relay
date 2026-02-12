@@ -4,7 +4,7 @@
 
 ## ✨ 特性
 
-- **memU bot 深度适配**: 自动处理 memU bot 发出的 `/v1/messages` (Anthropic) 或 `/v1/chat/completions` (OpenAI) 请求。
+- **memU bot 深度适配**: 自动处理 memU bot 发出的 `/v1/messages` (Anthropic)请求。
 - **协议转换**: 将各种 API 格式的消息流完整映射至 OpenAI 兼容模型原生格式。
 - **🔧 Function Call 支持**: 完整支持 Anthropic/MiniMax 风格的工具调用（`tool_use`/`tool_result`）。
 - **内置代理**: 支持 `--proxy` 参数，方便在中国大陆等网络环境下通过本地代理访问模型。
@@ -126,8 +126,8 @@ OpenAI/DeepSeek 拥有其自身的缓存逻辑（例如对超过 1024 token 的 
 ### 启用方式
 使用 `--tpm` 参数指定速率上限，支持 `K/M` 后缀或纯数字：
 ```bash
-./memobot-gemini-relay --tpm 0.9M     # 900,000 tokens/min
-./memobot-gemini-relay --tpm 2000000  # 2,000,000 tokens/min
+./memubot-openai-relay --tpm 0.9M     # 900,000 tokens/min
+./memubot-openai-relay --tpm 2000000  # 2,000,000 tokens/min
 ```
 
 ### 工作机制
